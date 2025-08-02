@@ -4,7 +4,7 @@ from sqlite3 import Error
 import pandas as pd
 import yfinance as yf
 
-tickers = ["BTC"]
+tickers = ["BTC-USD"]
 db = "ticker.db"
 
 
@@ -27,7 +27,9 @@ class DB_Handler:
         tables = self.cur.fetchall()
         for table in tables:
             self.cur.execute(f'DROP TABLE IF EXISTS "{table}";')
+            self.con.commit()
             print(f"Dropping table: {table} from db: {self.db}")
+        print(f"Tables that should have been dropped: {tables}")
 
     def create_tables(self):
         try:
@@ -48,7 +50,7 @@ class DB_Handler:
                 df = yf_ticker.history(period="max").reset_index()
                 df["Date"] = pd.to_datetime(df["Date"])
                 df["Date"] = df["Date"].dt.strftime("%Y%m%d")
-                df.to_sql(ticker, self.con, index=False)
+                df.to_sql(ticker, self.con, index=False, if_exists="append")
                 self.con.commit()
                 print(f"Successfully inserted history into table: {ticker}")
 
