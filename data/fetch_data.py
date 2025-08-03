@@ -12,10 +12,10 @@ class DB_Handler:
     def __init__(self, db, tickers):
         self.db = db
         self.tickers = tickers
-        self.con = self.create_connection(self.db)
+        self.con = self._create_connection(self.db)
         self.cur = self.con.cursor()
 
-    def create_connection(self, db: str):
+    def _create_connection(self, db: str):
         try:
             con = sqlite3.connect(db)
             return con
@@ -46,16 +46,25 @@ class DB_Handler:
     def insert_history(self):
         try:
             for ticker in self.tickers:
+                last_date = self._retrieve_last_date_formated(ticker)
                 yf_ticker = yf.Ticker(ticker)
                 df = yf_ticker.history(period="max").reset_index()
                 df["Date"] = pd.to_datetime(df["Date"])
-                df["Date"] = df["Date"].dt.strftime("%Y%m%d")
+                df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
                 df.to_sql(ticker, self.con, index=False, if_exists="append")
                 self.con.commit()
                 print(f"Successfully inserted history into table: {ticker}")
 
         except Error as e:
             print(f"SQLite failed on: {e}")
+
+    def _retrieve_last_date_formated(self, ticker):
+        last_date = self.cur.execute(
+            f'SELECT Date FROM "{ticker}" ORDER BY Date DESC LIMIT 1;'
+        ).fetchone()[0]
+        last_date_formated = f"{last_date[:4]}-{last_date[4:6]}-{last_date[6:]}"
+        print(last_date_formated)
+        return last_date_formated
 
 
 db_handler = DB_Handler(db, tickers)
