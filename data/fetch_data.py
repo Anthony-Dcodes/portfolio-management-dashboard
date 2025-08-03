@@ -40,8 +40,8 @@ class DB_Handler:
         try:
             for ticker in self.tickers:
                 sql = f"""CREATE TABLE IF NOT EXISTS "{ticker}" (
-                    Date TEXT, Open REAL, High REAL, Low REAL,
-                    Close REAL, Volume INTEGER, Dividends REAL
+                    date, open, high, low,
+                    close, volume, dividends, stock_splits
                 );"""
                 self.cur.execute(sql)
                 print(f"Successfully created table: {ticker}")
@@ -52,22 +52,21 @@ class DB_Handler:
         try:
             for ticker in self.tickers:
                 yf_ticker = yf.Ticker(ticker)
-                last_date = self._retrieve_last_date_formated(ticker)
+                last_date = self._retrieve_last_date(ticker)
                 if last_date:
                     df = yf_ticker.history(period="max", start=last_date).reset_index()
                 else:
                     df = yf_ticker.history(period="max").reset_index()
 
-                df["Date"] = pd.to_datetime(df["Date"])
-                df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
-                print(df["Date"].head())
+                df = self._format_df(df)
+                print(df.head())
                 df.to_sql(ticker, self.con, index=False, if_exists="append")
                 print(f"Successfully inserted history into table: {ticker}")
 
         except Error as e:
             print(f"SQLite failed on: {e}")
 
-    def _retrieve_last_date_formated(self, ticker):
+    def _retrieve_last_date(self, ticker):
         last_date = self.cur.execute(
             f'SELECT Date FROM "{ticker}" ORDER BY Date DESC LIMIT 1;'
         ).fetchone()
@@ -78,6 +77,27 @@ class DB_Handler:
             last_date = last_date[0]
             print(f"last_date: {last_date}")
             return last_date
+
+    def _format_df(self, df):
+        new_df = df.copy()
+        # Date formating
+        new_df["Date"] = pd.to_datetime(new_df["Date"])
+        new_df["Date"] = new_df["Date"].dt.strftime("%Y-%m-%d")
+        # Rename columns:
+        new_df = new_df.rename(
+            columns={
+                "Date": "date",
+                "Open": "open",
+                "High": "high",
+                "Low": "low",
+                "Close": "close",
+                "Volume": "volume",
+                "Dividends": "dividends",
+                "Stock Splits": "stock_splits",
+            }
+        )
+        print(new_df.head())
+        return new_df
 
 
 db_handler = DB_Handler(db, tickers)
