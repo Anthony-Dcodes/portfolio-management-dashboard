@@ -1,4 +1,6 @@
 import sqlite3
+from datetime import datetime as dt
+from datetime import timedelta
 from sqlite3 import Error
 
 import pandas as pd
@@ -53,8 +55,10 @@ class DB_Handler:
             for ticker in self.tickers:
                 yf_ticker = yf.Ticker(ticker)
                 last_date = self._retrieve_last_date(ticker)
-                if last_date:
-                    df = yf_ticker.history(period="max", start=last_date).reset_index()
+                print(last_date)
+                next_day = self._add_one_day(last_date)
+                if next_day:
+                    df = yf_ticker.history(period="max", start=next_day).reset_index()
                 else:
                     df = yf_ticker.history(period="max").reset_index()
 
@@ -98,6 +102,15 @@ class DB_Handler:
         )
         print(new_df.head())
         return new_df
+
+    def _add_one_day(date):
+        datetime_date = dt.strptime(date, "%Y%m%d")
+        print(datetime_date)
+        next_day = datetime_date + timedelta(days=1)
+        print(next_day)
+        next_day_formated = next_day.strftime("%Y%m%d")
+        print(next_day_formated)
+        return next_day_formated
 
 
 db_handler = DB_Handler(db, tickers)
