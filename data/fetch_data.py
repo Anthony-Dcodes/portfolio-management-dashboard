@@ -1,3 +1,4 @@
+import logging
 import sqlite3
 from datetime import datetime as dt
 from datetime import timedelta
@@ -6,8 +7,7 @@ from sqlite3 import Error
 import pandas as pd
 import yfinance as yf
 
-tickers = ["BTC-USD"]
-db = "ticker.db"
+logger = logging.getLogger(__name__)
 
 
 class DB_Handler:
@@ -16,18 +16,20 @@ class DB_Handler:
         self.tickers = tickers
         self.con = self._create_connection(self.db)
         self.cur = self.con.cursor()
+        logger.debug("DB_Handler initialized")
 
     def _create_connection(self, db: str):
         try:
             con = sqlite3.connect(db)
+            logger.debug(f"Succesfully connected to db: {self.db}")
             return con
         except Error as e:
-            print(f"SQLite error: {e}")
+            logger.error(f"Connecting to db failed: {e}")
 
     def commit_and_close(self):
         self.con.commit()
         self.con.close()
-        print("Successfully commited and closed connection")
+        logger.debug("Successfully commited and closed connection")
 
     def drop_all_tables(self):
         self.cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
@@ -35,8 +37,7 @@ class DB_Handler:
         for table in tables:
             table_name = table[0]
             self.cur.execute(f'DROP TABLE IF EXISTS "{table_name}";')
-            print(f"Dropping table: {table_name} from db: {self.db}")
-        print(f"Tables that should have been dropped: {tables}")
+            logger.info(f"Dropping table: {table_name} from db: {self.db}")
 
     def create_tables(self):
         try:
@@ -46,9 +47,9 @@ class DB_Handler:
                     close, volume, dividends, stock_splits
                 );"""
                 self.cur.execute(sql)
-                print(f"Successfully created table: {ticker}")
+                logger.debug(f"Successfully created table: {ticker}")
         except Error as e:
-            print(f"SQLite error: {e}")
+            logger.error(f"SQLite error: {e}")
 
     def insert_history(self):
         try:
@@ -57,28 +58,31 @@ class DB_Handler:
                 last_date = self._retrieve_last_date(ticker)
                 if last_date:
                     next_day = self._add_one_day(last_date)
+                    logger.debug(
+                        f"Loading history for ticker: {ticker}, from: {next_day} odwards"
+                    )
                     df = yf_ticker.history(period="max", start=next_day).reset_index()
                 else:
+                    logger.debug(f"Loading max history for ticker: {ticker}")
                     df = yf_ticker.history(period="max").reset_index()
 
                 df = self._format_df(df)
-                print(df.head())
                 df.to_sql(ticker, self.con, index=False, if_exists="append")
-                print(f"Successfully inserted history into table: {ticker}")
+                logger.info(f"Successfully inserted history into table: {ticker}")
 
         except Error as e:
-            print(f"SQLite failed on: {e}")
+            logger.error(f"SQLite failed on: {e}")
 
     def _retrieve_last_date(self, ticker):
         last_date = self.cur.execute(
             f'SELECT Date FROM "{ticker}" ORDER BY Date DESC LIMIT 1;'
         ).fetchone()
         if last_date is None:
-            print(f"Table: {ticker} is empty, will fetch all historical data")
+            logger.debug(f"Table: {ticker} is empty, will fetch all historical data")
             return None
         else:
             last_date = last_date[0]
-            print(f"last_date: {last_date}")
+            logger.debug(f"Retrieved last_date: {last_date} for ticker: {ticker}")
             return last_date
 
     def _format_df(self, df):
@@ -99,20 +103,11 @@ class DB_Handler:
                 "Stock Splits": "stock_splits",
             }
         )
+        logger.debug("Successfully formated df to be inserted")
         return new_df
 
     def _add_one_day(self, date):
         datetime_date = dt.strptime(date, "%Y-%m-%d")
-        print(datetime_date)
         next_day = datetime_date + timedelta(days=1)
-        print(next_day)
         next_day_formated = next_day.strftime("%Y-%m-%d")
-        print(next_day_formated)
         return next_day_formated
-
-
-db_handler = DB_Handler(db, tickers)
-# db_handler.drop_all_tables()
-db_handler.create_tables()
-db_handler.insert_history()
-db_handler.commit_and_close()
